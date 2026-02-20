@@ -6,6 +6,11 @@ theme_set(theme_light())
 library(VennDiagram)
 library(ComplexHeatmap)
 library(ggtext)
+library(UpSetR)
+library(ComplexUpset)
+library(tidyr)
+library(stringr)
+library(purrr)
 
 ######################################## STEADY STATES ##########################################
 steady_states <- read.csv('steady_states.csv')
@@ -296,3 +301,152 @@ venn.diagram(
   rotation = 1
 )
 #################################################################################################
+
+### MUTATIONS ON ORIGINAL MODEL UNDER TGFBL, GF AND BOTH TGFBL AND GF ###
+
+data <- read.csv("originalmodel_mutations_intnodes_TGFBL.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+TGFB_L=data_t[which(data_t$proportion ==0),]$mutation
+
+data <- read.csv("originalmodel_mutations_intnodes_GF.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+GF=data_t[which(data_t$proportion ==0),]$mutation
+
+data <- read.csv("originalmodel_mutations_intnodes_GF_TGFBL.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+GF_and_TGFB_L=data_t[which(data_t$proportion ==0),]$mutation
+
+input_list <- list(
+  TGFB_L_input_original = TGFB_L,
+  GF_input_original = GF,
+  GF_and_TGFB_L_inputs_original = GF_and_TGFB_L,
+  aTGFB = aTGFB,
+  aRTK = aRTK,
+  original = original
+)
+
+upset_data <- fromList(input_list)
+
+png("intersection_inputs_no_inputs.png", width = 1000, height = 1000, res = 130)
+
+ComplexUpset::upset(
+  upset_data,
+  intersect = names(input_list),
+  base_annotations = list(
+    'Intersection size' = intersection_size(
+      text = list(size = 5)
+    )
+  )
+)
+dev.off()
+
+#################################################################################################
+
+## COMBINATORIAL MUTATIONS 
+
+data <- read.csv("modelaTGFB_mutations_mut_combination.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+aTGFB=data_t[which(data_t$proportion ==0),]$mutation
+
+data <- read.csv("modelaRTK_mutations_mut_combination.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+aRTK=data_t[which(data_t$proportion ==0),]$mutation
+
+data <- read.csv("originalmodel_mutations_mut_combination.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+original=data_t[which(data_t$proportion ==0),]$mutation
+
+data <- read.csv("originalmodel_mutations_mut_combination_TGFBL.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+TGFB_L=data_t[which(data_t$proportion ==0),]$mutation
+
+data <- read.csv("originalmodel_mutations_mut_combination_GF.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+GF=data_t[which(data_t$proportion ==0),]$mutation
+
+data <- read.csv("originalmodel_mutations_mut_combination_GF_TGFBL.txt")
+data_t <-data[which(data$phenotypes == "M"),]
+GF_and_TGFB_L=data_t[which(data_t$proportion ==0),]$mutation
+
+
+input_list <- list(
+  TGFB_L_input_original = TGFB_L,
+  GF_input_original = GF,
+  GF_and_TGFB_L_inputs_original = GF_and_TGFB_L,
+  aTGFB = aTGFB,
+  aRTK = aRTK,
+  original = original
+)
+
+upset_data <- fromList(input_list)
+
+# upset plot
+
+png("combinatorial.png", width = 1000, height = 1000, res = 130)
+
+ComplexUpset::upset(
+  upset_data,
+  intersect = names(input_list),
+  base_annotations = list(
+    'Intersection size' = intersection_size(
+      text = list(size = 5)
+    )
+  )
+)
+
+dev.off()
+
+# heatmap
+
+m=fromList(input_list)
+m_tbl <- m %>%
+  tibble::rownames_to_column("element")
+
+df_long <- stack(input_list)
+
+colnames(df_long) <- c("element", "set")
+
+m_df <- df_long %>%
+  mutate(value = 1) %>%
+  pivot_wider(
+    names_from = set,
+    values_from = value,
+    values_fill = 0
+    
+  )
+
+
+# heatmap 
+
+m_df=as.data.frame(m_df)
+rownames(m_df)<-m_df$element 
+df=(data.matrix(subset(m_df, select = -element)))
+
+rownames(df) <- rownames(df) %>%
+  str_remove_all("^\\('") %>%     # remove starting ('
+  str_remove_all("'\\)$") %>%     # remove ending ')
+  str_replace("', '", " & ")  
+
+png("combinatorial_heatmap.png", width = 1600, height = 1400, res = 130)
+
+Heatmap(
+  df,
+  name = "val",
+  col = c("0" = "white", "1" = "steelblue"),
+  
+  cluster_rows = TRUE,
+  cluster_columns = FALSE,
+  
+  # add separation between squares
+  rect_gp = gpar(col = "grey70", lwd = 1),
+  
+  # rotate column names
+  column_names_rot = 45,
+  
+  # optional: improve readability
+  column_names_gp = gpar(fontsize = 10),
+  row_names_gp = gpar(fontsize = 8),
+  
+)
+
+dev.off()
